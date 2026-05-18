@@ -10,6 +10,22 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
+## 🚀 Live Demo
+
+Try the deployed Streamlit application here:
+
+👉 [Credit Risk Modeling Streamlit App](https://creditriskmodeling-dbvgyaavxuqjfbjtztxep5.streamlit.app/)
+
+### App Features
+
+* Real-time borrower risk scoring
+* Probability of Default (PD) prediction
+* Loss Given Default (LGD) estimation
+* Expected Credit Loss (ECL) calculation
+* Interactive input forms and visual insights
+* Business-friendly approve/reject recommendations
+
+The app demonstrates the end-to-end deployment of the machine learning pipeline using Streamlit.
 
 ## 📌 Problem Statement
 
