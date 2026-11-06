@@ -1,40 +1,53 @@
-# 🏦 Credit Risk Modeling — Small Finance Company
-
-> **End-to-end machine learning pipeline for predicting loan default probability and loss given default, tailored for small finance institutions with limited credit bureau coverage.**
+# 🏦 Credit Risk Modelling — PD Scorecard
+> **A probability-of-default scorecard for lenders whose borrowers have thin or no credit-bureau history. Predicts default probability, converts it into a 300–900 credit score, and returns an interpretable risk rating.**
 
 [![Python](https://img.shields.io/badge/Python-3.10+-blue?logo=python)](https://python.org)
 [![scikit-learn](https://img.shields.io/badge/scikit--learn-1.x-orange?logo=scikit-learn)](https://scikit-learn.org)
-[![XGBoost](https://img.shields.io/badge/XGBoost-latest-red)](https://xgboost.readthedocs.io)
 [![Optuna](https://img.shields.io/badge/Optuna-HPO-purple)](https://optuna.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-App-red?logo=streamlit)](https://streamlit.io)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green)](LICENSE)
 
 ---
+
 ## 🚀 Live Demo
 
-Try the deployed Streamlit application here:
+👉 [Credit Risk Modelling Streamlit App](https://creditriskmodeling-dbvgyaavxuqjfbjtztxep5.streamlit.app/)
 
-👉 [Credit Risk Modeling Streamlit App](https://creditriskmodeling-dbvgyaavxuqjfbjtztxep5.streamlit.app/)
+Enter a borrower profile and the app returns:
 
-### App Features
+- **Default probability** — the model's estimated likelihood of default
+- **Credit score** — that probability rescaled onto a 300–900 range
+- **Rating band** — Poor / Average / Good / Excellent
 
-* Real-time borrower risk scoring
-* Probability of Default (PD) prediction
-* Loss Given Default (LGD) estimation
-* Expected Credit Loss (ECL) calculation
-* Interactive input forms and visual insights
-* Business-friendly approve/reject recommendations
-
-The app demonstrates the end-to-end deployment of the machine learning pipeline using Streamlit.
+---
 
 ## 📌 Problem Statement
 
-Small finance companies and NBFCs face a unique challenge: their borrower base often lacks formal credit history, making traditional bureau-score-based underwriting insufficient. This project builds a **dual-output credit risk model** that simultaneously estimates:
+Small finance companies and NBFCs lend to a borrower base that often lacks formal credit
+history, which makes bureau-score-based underwriting insufficient. This project builds a
+**binary classification scorecard** that estimates the probability a given applicant will
+default, using application and behavioural data rather than a bureau score alone.
 
-- **Probability of Default (PD)** — will this borrower default?
-- **Loss Given Default (LGD)** — if they default, how much will the lender lose?
+The output is designed to support an origination decision — approve, review, or decline —
+and to be explainable to a credit officer.
 
-The final output is an **Expected Credit Loss (ECL)** score used to approve/reject loan applications and set risk-adjusted interest rates.
+---
+
+## 🎯 Scope
+
+**What this project does**
+
+- Estimates **Probability of Default (PD)** from 13 application and behavioural features
+- Converts PD into a 300–900 credit score with four rating bands
+- Serves predictions through a Streamlit application
+
+**What it deliberately does not do**
+
+- It does **not** model Loss Given Default (LGD) or Exposure at Default (EAD)
+- It does **not** compute Expected Credit Loss (ECL) or IFRS 9 provisions
+- It is a single-model PD scorecard, not a full credit-loss engine
+
+Those would be the natural next stage; see [Roadmap](#-roadmap).
 
 ---
 
@@ -43,222 +56,247 @@ The final output is an **Expected Credit Loss (ECL)** score used to approve/reje
 ```
 credit_risk_modeling/
 │
-├── credit_risk_model_codebasics.ipynb   # Main modeling notebook (EDA → Feature Eng → Training → Evaluation)
-├── optuna_tutorial.ipynb                # Hyperparameter optimization with Optuna
+├── credit_risk_model.ipynb              # Main notebook: EDA → features → training → evaluation
+├── optuna_tutorial.ipynb                # Hyperparameter optimisation walkthrough
 │
-├── app/                                 # Streamlit web application
-│   ├── app.py                           # Main app entry point
-│   └── ...
+├── app/
+│   ├── main.py                          # Streamlit UI
+│   ├── prediction_helper.py             # Preprocessing + scoring logic
+│   └── artifacts/model_data.joblib      # Copy of the canonical artifact
 │
-├── artifacts/                           # Saved model objects & encoders
-│   ├── model_pd.pkl                     # Trained PD classifier
-│   ├── model_lgd.pkl                    # Trained LGD regressor
-│   └── ...
+├── artifacts/
+│   └── model_data.joblib                # CANONICAL — written by the notebook's final cell
 │
-├── dataset/                             # Raw and processed data
-│   └── ...
+├── dataset/
+│   ├── customers.csv                    # Demographics and application data
+│   ├── loans.csv                        # Loan-level attributes and default flag
+│   └── bureau_data.csv                  # Credit bureau attributes
 │
-├── requirements.txt                     # Python dependencies
-└── Credit Risk Model Small Finance Company.pptx   # McKinsey-style project presentation
+├── requirements.txt
+└── Credit Risk Model Small Finance Company.pptx
 ```
+
+> **Note on artifacts:** `artifacts/model_data.joblib` at the repo root is canonical —
+> it is what the notebook writes. `app/artifacts/` holds an identical copy.
+> `prediction_helper.py` resolves the path relative to its own file location, so the
+> same model loads regardless of the working directory.
 
 ---
 
-## 🧠 Model Architecture
+## 🧠 Modelling Approach
 
-The system follows a **two-stage pipeline**:
+A single-stage binary classifier. The target is a default flag; the output is a calibrated
+probability that is then rescaled into a score.
 
 ```
-Raw Application Data
-        │
-        ▼
-┌─────────────────────┐
-│  Data Preprocessing  │  ← Missing value imputation, outlier treatment, encoding
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│  Feature Engineering │  ← Income ratios, credit utilization, loan-to-value, bureau scores
-└──────────┬──────────┘
-           │
-     ┌─────┴──────┐
-     ▼            ▼
-┌─────────┐  ┌─────────┐
-│  PD     │  │  LGD    │
-│ Model   │  │ Model   │
-│(XGBoost)│  │(XGBoost)│
-└────┬────┘  └────┬────┘
-     │             │
-     └──────┬──────┘
-            ▼
-   ECL = PD × LGD × EAD
+Raw application / loan / bureau data
             │
             ▼
-   ┌──────────────────┐
-   │ Risk Score Output │  ← Approve / Reject / Manual Review
-   └──────────────────┘
+   Train/test split  (performed BEFORE cleaning, to avoid leakage)
+            │
+            ▼
+   Cleaning  →  missing values, duplicates, outlier treatment,
+                data-error correction in loan_purpose
+            │
+            ▼
+   Feature engineering  →  loan-to-income, delinquency ratio,
+                           avg DPD per delinquency
+            │
+            ▼
+   Feature selection  →  VIF (multicollinearity)
+                         WOE / Information Value (categorical)
+            │
+            ▼
+   Encoding + MinMax scaling
+            │
+            ▼
+   Model search  →  Logistic Regression vs XGBoost
+                    RandomizedSearchCV, then Optuna
+                    Imbalance: RandomUnderSampler, SMOTETomek,
+                               class_weight, scale_pos_weight
+            │
+            ▼
+   Evaluation  →  ROC/AUC, Gini, KS, decile rank-ordering
+            │
+            ▼
+   FINAL MODEL: Logistic Regression  →  artifacts/model_data.joblib
 ```
 
-### Stage 1 — Probability of Default (PD)
-- **Algorithm:** XGBoost Classifier
-- **Target:** Binary (1 = default, 0 = no default)
-- **Threshold tuning:** F1-optimized cutoff via ROC-AUC analysis
-- **Handling imbalance:** `scale_pos_weight`, SMOTE-inspired weighting
+### Why logistic regression as the final model
 
-### Stage 2 — Loss Given Default (LGD)
-- **Algorithm:** XGBoost Regressor (or two-stage beta regression)
-- **Target:** Recovery rate (0–1), transformed to LGD
-- **Only applied** to predicted defaulters from Stage 1
+XGBoost scored marginally higher on the tuned F1 objective (0.975 vs 0.946 in the Optuna
+trials), but logistic regression was selected because:
 
-### Hyperparameter Optimization
-- **Framework:** Optuna with TPE sampler
-- **Search space:** `max_depth`, `n_estimators`, `learning_rate`, `subsample`, `colsample_bytree`, `reg_alpha`, `reg_lambda`
-- **Pruning:** Median pruner for early stopping of unpromising trials
+- Coefficients are directly interpretable, which matters for adverse-action reasoning
+- It is the established standard for regulated credit scorecards
+- The accuracy difference did not justify the loss of explainability
+
+This mirrors standard industry practice: use the boosted model as a challenger and for
+feature discovery, ship the interpretable one.
 
 ---
 
-## 📊 Key Features Engineered
+## 📊 Features Used (13)
 
-| Feature | Description |
-|--------|-------------|
-| `loan_to_income` | Loan amount / Annual income |
-| `credit_utilization` | Outstanding debt / Credit limit |
-| `delinquency_ratio` | Past dues / Total historical payments |
-| `employment_stability` | Tenure at current employer (binned) |
-| `bureau_score_band` | Discretized CIBIL/Experian score |
-| `ltv_ratio` | Loan to collateral value (for secured loans) |
-| `income_per_dependent` | Income normalized by family obligations |
+| Feature | Type | Description |
+|---|---|---|
+| `age` | Numeric | Applicant age |
+| `loan_tenure_months` | Numeric | Requested loan term |
+| `number_of_open_accounts` | Numeric | Active credit accounts |
+| `credit_utilization_ratio` | Numeric | Outstanding debt ÷ credit limit |
+| `loan_to_income` | Engineered | Loan amount ÷ annual income |
+| `delinquency_ratio` | Engineered | Past dues ÷ total payments |
+| `avg_dpd_per_delinquency` | Engineered | Average days past due per delinquent event |
+| `residence_type_Owned` | One-hot | Reference category: Mortgage |
+| `residence_type_Rented` | One-hot | |
+| `loan_purpose_Education` | One-hot | Reference category: Auto |
+| `loan_purpose_Home` | One-hot | |
+| `loan_purpose_Personal` | One-hot | |
+| `loan_type_Unsecured` | One-hot | Reference category: Secured |
 
 ---
 
 ## 📈 Model Performance
 
-| Metric | PD Model | LGD Model |
-|--------|----------|-----------|
-| ROC-AUC | ~0.85+ | — |
-| Gini Coefficient | ~0.70 | — |
-| KS Statistic | ~0.45 | — |
-| RMSE | — | ~0.12 |
-| R² | — | ~0.68 |
+Evaluated on a held-out test set of **12,497 records** (train: 37,500; default rate ≈ 8.6%).
 
-> Metrics are indicative based on the training dataset. See notebook for full evaluation cells.
+| Metric | Value |
+|---|---|
+| ROC-AUC | **0.984** |
+| Gini coefficient | **0.967** |
+| Accuracy | 0.93 |
+| Recall (default class) | **0.94** |
+| Precision (default class) | 0.56 |
+| F1 (default class) | 0.70 |
+
+KS statistic and rank-ordering are computed per decile in the notebook's evaluation section.
+
+> ### ⚠️ On the AUC
+>
+> An AUC of 0.98 is **unusually high for credit default prediction**, where 0.75–0.85 is
+> typical. This is worth investigating before treating the model as production-ready.
+> The most likely explanation is **target leakage through the behavioural features**:
+> `delinquency_ratio` and `avg_dpd_per_delinquency` are derived from repayment history,
+> and if that history spans or follows the default event, they partly encode the target.
+>
+> A proper fix is to compute those features **strictly from data available at the point of
+> application**, then re-measure. See [Roadmap](#-roadmap).
+
+### Class-imbalance trade-off
+
+The model is tuned for **recall on the default class** (0.94) at the cost of precision
+(0.56) — roughly 44% of flagged applications are false positives. For origination this is
+usually the right direction, since a missed default costs the loan value while a false
+positive costs a review. The operating point should be set from the business cost ratio
+rather than from F1.
+
+---
+
+## 🎚️ Score Mapping
+
+```python
+credit_score = 300 + (1 - default_probability) * 600
+```
+
+| Score | Rating |
+|---|---|
+| 300–499 | Poor |
+| 500–649 | Average |
+| 650–749 | Good |
+| 750–900 | Excellent |
+
+> **Known limitation:** this mapping is linear in *probability*. Industry scorecards are
+> linear in *log-odds* — `score = Offset + Factor × ln(odds)`, with `Factor = PDO / ln(2)`
+> — which gives a constant odds interpretation per point across the whole range. The
+> current scaling compresses discrimination at the extremes. The band cut-offs are also
+> indicative rather than derived from swap-set analysis.
 
 ---
 
 ## 🛠️ Tech Stack
 
 | Layer | Technology |
-|-------|-----------|
-| **Language** | Python 3.10+ |
-| **Data Processing** | Pandas, NumPy |
-| **Visualization** | Matplotlib, Seaborn, Plotly |
-| **Modeling** | scikit-learn, XGBoost |
-| **HPO** | Optuna |
-| **App** | Streamlit |
-| **Serialization** | Pickle / Joblib |
-| **Notebook** | Jupyter Notebook |
+|---|---|
+| Language | Python 3.10+ |
+| Data | Pandas, NumPy |
+| Visualisation | Matplotlib, Seaborn |
+| Modelling | scikit-learn (LogisticRegression), XGBoost (challenger) |
+| Imbalance | imbalanced-learn — RandomUnderSampler, SMOTETomek |
+| HPO | Optuna (TPE sampler), RandomizedSearchCV |
+| App | Streamlit |
+| Serialisation | joblib |
 
 ---
 
 ## 🚀 Getting Started
 
-### 1. Clone the Repository
-
 ```bash
 git clone https://github.com/Sajalagarwal-ca/credit_risk_modeling.git
 cd credit_risk_modeling
-```
-
-### 2. Install Dependencies
-
-```bash
 pip install -r requirements.txt
 ```
 
-### 3. Run the Notebook
-
-Open `credit_risk_model_codebasics.ipynb` in Jupyter:
+**Run the notebook**
 
 ```bash
-jupyter notebook credit_risk_model_codebasics.ipynb
+jupyter notebook credit_risk_model.ipynb
 ```
 
-### 4. Launch the Streamlit App
+**Run the app** — from the repository root:
 
 ```bash
-cd app
-streamlit run app.py
+streamlit run app/main.py
 ```
 
 ---
 
 ## 📋 Notebook Walkthrough
 
-The main notebook covers:
-
-1. **Exploratory Data Analysis (EDA)**
-   - Default rate distribution, class imbalance analysis
-   - Correlation heatmaps, feature distributions
-   - Bivariate analysis: default rate vs. key predictors
-
-2. **Data Preprocessing**
-   - Missing value strategy (median/mode imputation)
-   - Categorical encoding (target encoding, WoE)
-   - Train/validation/test split (stratified)
-
-3. **Feature Engineering**
-   - Domain-driven ratio features
-   - Interaction terms, polynomial features
-   - Feature importance & selection via SHAP
-
-4. **Model Training**
-   - Baseline: Logistic Regression
-   - Advanced: XGBoost with class weighting
-   - Hyperparameter tuning via Optuna (`optuna_tutorial.ipynb`)
-
-5. **Model Evaluation**
-   - ROC-AUC, KS statistic, Gini coefficient
-   - Confusion matrix, precision-recall tradeoff
-   - SHAP waterfall/beeswarm plots for interpretability
-
-6. **ECL Calculation**
-   - Combining PD and LGD outputs
-   - Portfolio-level expected loss simulation
+1. **Load and split** — three source tables joined; train/test split performed *before*
+   cleaning so no test information influences preprocessing
+2. **Cleaning** — missing values, duplicates, outlier removal on `processing_fee`,
+   correction of data-entry errors in `loan_purpose`
+3. **EDA** — box plots, KDE plots, categorical distribution analysis
+4. **Feature engineering** — loan-to-income, delinquency ratio, average DPD per delinquency
+5. **Feature selection** — VIF for multicollinearity; WOE and Information Value for
+   categorical predictive power
+6. **Model search** — four attempts across Logistic Regression and XGBoost, with
+   RandomizedSearchCV then Optuna, testing RandomUnderSampler and SMOTETomek
+7. **Evaluation** — ROC/AUC, Gini, decile rank-ordering and KS
+8. **Finalise** — coefficient-based feature importance, artifact serialisation
 
 ---
 
-## 🌐 Use Cases
+## 🔮 Roadmap
 
-- **Loan origination:** Real-time risk scoring at point of application
-- **Portfolio monitoring:** Batch ECL computation for regulatory provisioning (IFRS 9)
-- **Pricing engine:** Risk-adjusted rate setting for new borrowers
-- **Collection prioritization:** Identify high-LGD accounts for early intervention
+**Correctness first**
 
----
+- [ ] **Investigate the 0.98 AUC for target leakage** — recompute behavioural features
+      using only data available at application time, then re-baseline
+- [ ] Replace the dummy-column workaround in `prediction_helper.py` with a scikit-learn
+      `Pipeline` / `ColumnTransformer` so preprocessing and model are serialised together
+- [ ] Move the scorecard scaling into the notebook, derived from log-odds, rather than
+      defining it in the app
+- [ ] Add calibration assessment — a reliability curve and Brier score — since a
+      probability that drives a decision needs to be right in *level*, not just in ranking
 
-## 🔮 Future Enhancements
+**Extensions**
 
-- [ ] Add SHAP-based explainability dashboard in Streamlit
-- [ ] Incorporate time-series delinquency features (vintage analysis)
-- [ ] MLflow experiment tracking
-- [ ] Docker containerization for deployment
-- [ ] REST API wrapper (FastAPI)
-- [ ] Model drift monitoring (Evidently AI)
+- [ ] Add an **LGD model** and **EAD** assumption to enable `ECL = PD × LGD × EAD`
+- [ ] Reject inference, to correct for training only on approved applicants
+- [ ] SHAP explainability panel in the Streamlit app
+- [ ] Drift monitoring — PSI on scores and features, actual-vs-expected by score band
+- [ ] MLflow experiment tracking; Docker packaging; FastAPI inference endpoint
 
 ---
 
 ## 👤 Author
 
-**Sajal Agarwal**
-- GitHub: [@Sajalagarwal-ca](https://github.com/Sajalagarwal-ca)
-- Location: Toronto, Canada
+**Sajal Agarwal** — Toronto, Canada
+GitHub: [@Sajalagarwal-ca](https://github.com/Sajalagarwal-ca)
 
 ---
 
 ## 📄 License
 
-This project is licensed under the MIT License.
-
----
-
-*Built with ❤️ for the ML & fintech community. Star ⭐ the repo if you found it useful!*
+MIT — see [LICENSE](LICENSE).

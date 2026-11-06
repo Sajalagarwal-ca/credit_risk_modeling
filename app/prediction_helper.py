@@ -1,10 +1,21 @@
 import joblib
 import numpy as np
 import pandas as pd
+from pathlib import Path
 from sklearn.preprocessing import MinMaxScaler
 
-# Path to the saved model and its components
-MODEL_PATH = 'artifacts/model_data.joblib'
+# Resolve the model relative to THIS file, not the working directory.
+# Previously this was the bare relative path 'artifacts/model_data.joblib', so
+# which model loaded depended on where streamlit was launched from - the repo
+# root and app/ held different artifacts with different intercepts.
+# artifacts/model_data.joblib at the repo root is the canonical one: it is what
+# the final cell of credit_risk_model.ipynb writes.
+_APP_DIR = Path(__file__).resolve().parent
+_CANDIDATES = [
+    _APP_DIR.parent / "artifacts" / "model_data.joblib",   # repo root (canonical)
+    _APP_DIR / "artifacts" / "model_data.joblib",          # fallback
+]
+MODEL_PATH = next((p for p in _CANDIDATES if p.exists()), _CANDIDATES[0])
 
 # Load the model and its components
 model_data = joblib.load(MODEL_PATH)
@@ -17,7 +28,15 @@ cols_to_scale = model_data['cols_to_scale']
 def prepare_input(age, income, loan_amount, loan_tenure_months, avg_dpd_per_delinquency,
                     delinquency_ratio, credit_utilization_ratio, num_open_accounts, residence_type,
                     loan_purpose, loan_type):
-    # Create a dictionary with input values and dummy values for missing features
+    # KNOWN LIMITATION
+    # The MinMaxScaler was fitted on 18 columns during training, but the final
+    # model only consumes 13 features (7 of which are scaled). The placeholder
+    # values below exist purely so scaler.transform() receives the column set it
+    # expects; they are dropped immediately afterwards when df is reduced to
+    # `features`. MinMaxScaler scales each column independently, so these do not
+    # affect the 7 real scaled values.
+    # Proper fix: persist preprocessing and model together in a single
+    # sklearn Pipeline / ColumnTransformer so training and serving cannot drift.
     input_data = {
         'age': age,
         'loan_tenure_months': loan_tenure_months,
